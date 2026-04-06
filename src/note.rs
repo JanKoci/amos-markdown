@@ -1,4 +1,7 @@
+use crate::metadata;
+use crate::metadata::Metadata;
 use anyhow::{Context, Result};
+use chrono::Local;
 use pulldown_cmark::{Event, Options, Parser, TagEnd, html};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,34 +13,59 @@ pub struct Note {
     pub path: PathBuf,
     pub html: String,
     pub plain_text: String,
+    pub metadata: Option<Metadata>,
 }
 
 /// Creates a new .md file at `dir/title.md` with the given body.
-pub fn create_note(dir: &Path, title: &str, body: &str) -> Result<Note> {
+pub fn create_note(dir: &Path, title: &str, body: &str, tags: Vec<String>) -> Result<Note> {
     fs::create_dir_all(dir).context("Failed to create notes directory")?;
 
+    let created = Local::now().format("%Y-%m-%d").to_string();
+    let tags_yaml = tags
+        .iter()
+        .map(|tag| format!("\"{}\"", tag))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let raw = format!(
+        "---\ntitle: \"{title}\"\ntags: [{tags_yaml}]\ncreated: \"{created}\"\n---\n\n# {title}\n\n{body}"
+    );
+
     let path = dir.join(format!("{title}.md"));
-    fs::write(&path, body)
+    fs::write(&path, &raw)
         .with_context(|| format!("Failed to write note to {}", path.display()))?;
-    
+
+    let metadata = Metadata {
+        title: Some(title.to_string()),
+        tags,
+        created: Some(created),
+    };
+
     Ok(Note {
         title: title.to_string(),
         body: body.to_string(),
         path,
         html: to_html(body),
         plain_text: to_plain_text(body),
+        metadata: Some(metadata),
     })
 }
 
 /// Reads a single .md file and returns a Note.
 pub fn load_note(path: &Path) -> Result<Note> {
-    let body = fs::read_to_string(path)
+    let raw = fs::read_to_string(path)
         .with_context(|| format!("Failed to read note from {}", path.display()))?;
 
-    let title = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Untitled")
+    let (metadata, body) = metadata::parse_front_matter(&raw)?;
+
+    let title = metadata
+        .as_ref()
+        .and_then(|m| m.title.as_deref())
+        .unwrap_or_else(|| {
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+        })
         .to_string();
 
     let html = to_html(&body);
@@ -49,6 +77,7 @@ pub fn load_note(path: &Path) -> Result<Note> {
         path: path.to_path_buf(),
         html,
         plain_text,
+        metadata,
     })
 }
 

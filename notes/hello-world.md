@@ -1,4 +1,9 @@
-# Hello World
+---
+title: "hello-world"
+tags: ["intro", "test"]
+created: "2026-04-06"
+---
 
-This is my
-  first note.
+# hello-world
+
+This is my **first** note.
