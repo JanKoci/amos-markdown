@@ -1,36 +1,32 @@
-use anyhow::Result;
-use std::path::Path;
-
+mod app;
 mod metadata;
 mod note;
 
-fn main() -> Result<()> {
-    let notes_dir = Path::new("notes");
+use std::path::PathBuf;
 
-    // Create a couple of test notes
-    note::create_note(
-        notes_dir,
-        "hello-world",
-        "This is my **first** note.",
-        vec!["intro".into(), "test".into()],
-    )?;
-    note::create_note(
-        notes_dir,
-        "rust-tips",
-        "- Use `?` for error propagation\n- Prefer `anyhow` for app code",
-        vec!["rust".into()],
-    )?;
+fn main() -> eframe::Result {
+    let notes_dir = PathBuf::from("notes");
 
-    // Load them all back
-    let notes = note::load_all_notes(notes_dir)?;
-    println!("Loaded {} notes:\n", notes.len());
-    for n in &notes {
-        println!("=== {} ===", n.title);
-        if let Some(meta) = &n.metadata {
-            println!("tags: {:?}", meta.tags);
-        }
-        println!("{}\n", n.plain_text);
+    // Seed a couple of notes if the directory doesn't exist yet
+    if !notes_dir.exists() {
+        let _ = note::create_note(
+            &notes_dir,
+            "hello-world",
+            "This is my **first** note.",
+            vec!["intro".into()],
+        );
+        let _ = note::create_note(
+            &notes_dir,
+            "rust-tips",
+            "- Use `?` for error propagation\n- Prefer `anyhow` for app code",
+            vec!["rust".into()],
+        );
     }
 
-    Ok(())
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "Markdown Notes",
+        options,
+        Box::new(|_cc| Ok(Box::new(app::NoteApp::new(notes_dir)))),
+    )
 }
